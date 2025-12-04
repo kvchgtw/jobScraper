@@ -14,10 +14,17 @@
 
 1. In your Supabase project, go to **SQL Editor** (left sidebar)
 2. Click **New Query**
-3. Copy the entire contents of `supabase/schema.sql`
-4. Paste into the SQL editor
-5. Click **Run** (or press Ctrl/Cmd + Enter)
-6. You should see "Success. No rows returned"
+3. Run the migrations in order:
+
+   **First Migration:** Copy contents of `supabase/migrations/002_enhanced_schema.sql`
+   - Paste into SQL editor
+   - Click **Run** (or press Ctrl/Cmd + Enter)
+   - You should see "Success"
+
+   **Second Migration:** Copy contents of `supabase/migrations/003_fix_scrape_logs_rls.sql`
+   - Paste into SQL editor
+   - Click **Run**
+   - You should see "Success"
 
 ## Step 3: Get API Credentials
 

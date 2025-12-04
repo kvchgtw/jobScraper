@@ -49,7 +49,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
 4. **Set up database**:
    - Go to Supabase SQL Editor
-   - Run the schema from `supabase/schema.sql`
+   - Run the migrations from `supabase/migrations/` in order:
+     1. First run `002_enhanced_schema.sql`
+     2. Then run `003_fix_scrape_logs_rls.sql`
 
 5. **Run development server**:
 ```bash
