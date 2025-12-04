@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-terminal-bg text-terminal-text font-mono;
+  }
+}
+
+@layer utilities {
+  .ascii-border {
+    border-style: solid;
+    border-color: theme('colors.terminal.border');
+  }
+
+  .ascii-box {
+    @apply ascii-border border;
+    box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+  }
+}
