@@ -109,7 +109,7 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Link href="/" className="text-2xl font-bold" style={{ color: '#F4A460' }}>
-              SUNSHINE CAREERS
+              JOB SCRAPER
             </Link>
           </div>
 
@@ -241,7 +241,7 @@ export default function Home() {
         {/* Footer */}
         <footer className="mt-16 pt-8 border-t" style={{ borderColor: '#F5E6D3' }}>
           <div className="flex items-center justify-between text-sm text-gray-600">
-            <p>© 2024 SUNSHINE CAREERS. All rights reserved.</p>
+            <p>© 2024 JOB SCRAPER. All rights reserved.</p>
 
             <div className="flex items-center gap-6">
               <Link href="/" className="hover:text-gray-900">Find Jobs</Link>

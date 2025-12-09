@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Job Aggregator | Find Your Next Opportunity",
+  title: "Job Scraper | Find Your Next Opportunity",
   description: "Search job opportunities across multiple platforms",
 };
 
