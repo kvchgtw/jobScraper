@@ -1,4 +1,5 @@
 import axios from "axios";
+import * as cheerio from "cheerio";
 import { v5 as uuidv5 } from "uuid";
 import { supabaseServer } from "@/lib/supabase/server";
 import { ASHBY_COMPANIES } from "@/lib/ashby-companies";
@@ -104,6 +105,49 @@ export async function scrapeAshby(): Promise<ScrapeResult> {
 }
 
 /**
+ * Checks if a job posting is actually active by fetching the job page
+ * Returns false if the page shows "This job is no longer accepting applications"
+ */
+async function checkJobIsActive(jobUrl: string): Promise<boolean> {
+  try {
+    const response = await axios.get(jobUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+      },
+      timeout: 10000,
+    });
+
+    const $ = cheerio.load(response.data);
+
+    // Check for various indicators that the job is closed
+    const pageText = $('body').text().toLowerCase();
+
+    // Common phrases that indicate a closed job
+    const closedIndicators = [
+      'this job is no longer accepting applications',
+      'this position is no longer available',
+      'this job posting has been closed',
+      'applications are no longer being accepted',
+      'this position has been filled',
+    ];
+
+    for (const indicator of closedIndicators) {
+      if (pageText.includes(indicator)) {
+        return false;
+      }
+    }
+
+    // If there's no clear closed message, consider it active
+    return true;
+
+  } catch (error: any) {
+    // If we can't fetch the page, assume it's inactive to be safe
+    console.error(`[Ashby] Error checking job status for ${jobUrl}:`, error.message);
+    return false;
+  }
+}
+
+/**
  * Scrapes a single Ashby company's job board using their GraphQL API
  */
 async function scrapeAshbyCompany(companyName: string, slug: string): Promise<Job[]> {
@@ -158,6 +202,17 @@ async function scrapeAshbyCompany(companyName: string, slug: string): Promise<Jo
     for (const posting of jobPostings) {
       const jobUrl = `https://jobs.ashbyhq.com/${slug}/${posting.id}`;
       const jobId = uuidv5(jobUrl, NAMESPACE);
+
+      // Verify if the job is actually active by checking the job page
+      const isJobActive = await checkJobIsActive(jobUrl);
+
+      if (!isJobActive) {
+        console.log(`[Ashby] ${companyName}: Job ${posting.title} is closed, skipping`);
+        continue;
+      }
+
+      // Small delay to avoid overwhelming the server
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       // Determine location and remote status from location name
       let location = posting.locationName || "Not specified";

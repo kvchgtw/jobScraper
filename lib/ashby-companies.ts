@@ -7,7 +7,7 @@ export interface AshbyCompany {
 }
 
 export const ASHBY_COMPANIES: AshbyCompany[] = [
-  { name: "The Browser Company", slug: "thebrowsercompany" },
+  { name: "The Browser Company", slug: "The%20Browser%20Company" },
   { name: "Anthropic", slug: "anthropic" },
   { name: "Replit", slug: "replit" },
   { name: "OpenAI", slug: "openai" },
