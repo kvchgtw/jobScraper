@@ -17,11 +17,30 @@ interface Job {
 export default function Home() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [locationQuery, setLocationQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [debouncedLocationQuery, setDebouncedLocationQuery] = useState("");
   const [bookmarked, setBookmarked] = useState<Set<string>>(new Set());
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
+
+  // Read URL parameters on mount to support company navigation
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const queryParam = params.get('q');
+    const locationParam = params.get('location');
+
+    if (queryParam) {
+      setSearchQuery(queryParam);
+      setDebouncedSearchQuery(queryParam);
+    }
+    if (locationParam) {
+      setLocationQuery(locationParam);
+      setDebouncedLocationQuery(locationParam);
+    }
+  }, []);
 
   // Debounce search queries to prevent rate limiting
   useEffect(() => {
@@ -61,6 +80,8 @@ export default function Home() {
         }
 
         setJobs(data.jobs || []);
+        setNextCursor(data.nextCursor || null);
+        setHasMore(data.hasMore || false);
       } catch (error) {
         console.error('Error fetching jobs:', error);
       } finally {
@@ -69,6 +90,37 @@ export default function Home() {
     }
     fetchJobs();
   }, [debouncedSearchQuery, debouncedLocationQuery]);
+
+  // Load more jobs
+  const loadMoreJobs = async () => {
+    if (!hasMore || !nextCursor || loadingMore) return;
+
+    setLoadingMore(true);
+    const params = new URLSearchParams();
+
+    if (debouncedSearchQuery) params.append('q', debouncedSearchQuery);
+    if (debouncedLocationQuery) params.append('location', debouncedLocationQuery);
+    params.append('limit', '50');
+    params.append('cursor', nextCursor);
+
+    try {
+      const response = await fetch(`/api/search?${params.toString()}`);
+      const data = await response.json();
+
+      if (response.status === 429) {
+        console.error('Rate limit exceeded:', data.error);
+        return;
+      }
+
+      setJobs((prevJobs) => [...prevJobs, ...(data.jobs || [])]);
+      setNextCursor(data.nextCursor || null);
+      setHasMore(data.hasMore || false);
+    } catch (error) {
+      console.error('Error loading more jobs:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const timeAgo = (date: string) => {
     const seconds = Math.floor((new Date().getTime() - new Date(date).getTime()) / 1000);
@@ -181,60 +233,79 @@ export default function Home() {
           ) : jobs.length === 0 ? (
             <div className="text-center py-20 text-gray-600">No jobs found. Try a different search!</div>
           ) : (
-            jobs.map((job) => (
-              <div
-                key={job.id}
-                className="job-card"
-                onClick={() => window.open(job.url, '_blank')}
-              >
-                <div className="flex items-start gap-4">
-                  {/* Company Icon */}
-                  <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0"
-                    style={{ backgroundColor: getRandomColor(job.company) }}
-                  >
-                    {getCompanyIcon(job.company)}
-                  </div>
+            <>
+              {jobs.map((job) => (
+                <div
+                  key={job.id}
+                  className="job-card"
+                  onClick={() => window.open(job.url, '_blank')}
+                >
+                  <div className="flex items-start gap-4">
+                    {/* Company Icon */}
+                    <div
+                      className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-xl flex-shrink-0"
+                      style={{ backgroundColor: getRandomColor(job.company) }}
+                    >
+                      {getCompanyIcon(job.company)}
+                    </div>
 
-                  {/* Job Details */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <h3 className="text-lg font-semibold text-gray-900 mb-1">{job.title}</h3>
-                        <p className="text-gray-700 mb-2">{job.company}</p>
+                    {/* Job Details */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex-1">
+                          <h3 className="text-lg font-semibold text-gray-900 mb-1">{job.title}</h3>
+                          <p className="text-gray-700 mb-2">{job.company}</p>
 
-                        <div className="flex items-center gap-4 flex-wrap text-sm text-gray-600">
-                          {job.remote && (
-                            <span className="remote-badge">Remote</span>
-                          )}
-                          <span>{job.location || 'Full-time'}</span>
-                          <span>{timeAgo(job.scraped_at)}</span>
-                        </div>
-                      </div>
-
-                      {/* Salary & Bookmark */}
-                      <div className="flex items-start gap-3">
-                        {job.salary && (
-                          <div className="text-right">
-                            <p className="text-gray-900 font-semibold">{job.salary}</p>
-                            <p className="text-xs text-gray-500">/ year</p>
+                          <div className="flex items-center gap-4 flex-wrap text-sm text-gray-600">
+                            {job.remote && (
+                              <span className="remote-badge">Remote</span>
+                            )}
+                            <span>{job.location || 'Full-time'}</span>
+                            <span>{timeAgo(job.scraped_at)}</span>
                           </div>
-                        )}
+                        </div>
 
-                        <button
-                          className="bookmark-btn"
-                          onClick={(e) => toggleBookmark(job.id, e)}
-                        >
-                          <span className="text-lg">
-                            {bookmarked.has(job.id) ? '🔖' : '🏷️'}
-                          </span>
-                        </button>
+                        {/* Salary & Bookmark */}
+                        <div className="flex items-start gap-3">
+                          {job.salary && (
+                            <div className="text-right">
+                              <p className="text-gray-900 font-semibold">{job.salary}</p>
+                              <p className="text-xs text-gray-500">/ year</p>
+                            </div>
+                          )}
+
+                          <button
+                            className="bookmark-btn"
+                            onClick={(e) => toggleBookmark(job.id, e)}
+                          >
+                            <span className="text-lg">
+                              {bookmarked.has(job.id) ? '🔖' : '🏷️'}
+                            </span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              ))}
+
+              {/* Load More Button */}
+              {hasMore && (
+                <div className="text-center pt-6 pb-4">
+                  <button
+                    onClick={loadMoreJobs}
+                    disabled={loadingMore}
+                    className="px-8 py-3 rounded-xl font-semibold text-gray-800 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{ backgroundColor: '#FFD700' }}
+                  >
+                    {loadingMore ? 'Loading...' : 'Load More Jobs'}
+                  </button>
+                  <p className="text-sm text-gray-500 mt-2">
+                    Showing {jobs.length} jobs
+                  </p>
+                </div>
+              )}
+            </>
           )}
         </div>
 

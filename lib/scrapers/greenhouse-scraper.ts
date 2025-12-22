@@ -1,12 +1,11 @@
 import axios from "axios";
-import * as cheerio from "cheerio";
 import { v5 as uuidv5 } from "uuid";
 import { supabaseServer } from "@/lib/supabase/server";
-import { ASHBY_COMPANIES } from "@/lib/ashby-companies";
+import { GREENHOUSE_COMPANIES } from "@/lib/greenhouse-companies";
 import type { Job, ScrapeLog } from "@/lib/types";
 
 const NAMESPACE = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
-const SOURCE = "ashby";
+const SOURCE = "greenhouse";
 
 interface ScrapeResult {
   success: boolean;
@@ -17,32 +16,49 @@ interface ScrapeResult {
   error?: string;
 }
 
+interface GreenhouseJob {
+  id: number;
+  title: string;
+  location: {
+    name: string;
+  };
+  absolute_url: string;
+  updated_at: string;
+  metadata: any[];
+}
+
+interface GreenhouseDepartment {
+  id: number;
+  name: string;
+  jobs: GreenhouseJob[];
+}
+
 /**
- * Scrapes all Ashby company job boards and updates the database
+ * Scrapes all Greenhouse company job boards and updates the database
  * Features:
  * - Upserts jobs (creates new, updates existing)
  * - Tracks first_seen_at and last_seen_at
  * - Marks jobs as inactive when they disappear
  * - Logs scrape results to scrape_logs table
  */
-export async function scrapeAshby(): Promise<ScrapeResult> {
+export async function scrapeGreenhouse(): Promise<ScrapeResult> {
   const startTime = Date.now();
   const scrapedJobUrls = new Set<string>();
   let jobsFound = 0;
   let jobsUpserted = 0;
 
   try {
-    const totalCompanies = ASHBY_COMPANIES.length;
-    console.log(`[Ashby] Starting scrape of ${totalCompanies} companies`);
+    const totalCompanies = GREENHOUSE_COMPANIES.length;
+    console.log(`[Greenhouse] Starting scrape of ${totalCompanies} companies`);
 
     // Scrape all companies
-    for (let i = 0; i < ASHBY_COMPANIES.length; i++) {
-      const company = ASHBY_COMPANIES[i];
+    for (let i = 0; i < GREENHOUSE_COMPANIES.length; i++) {
+      const company = GREENHOUSE_COMPANIES[i];
       const progress = ((i / totalCompanies) * 100).toFixed(1);
 
       try {
-        console.log(`[Ashby] [${i + 1}/${totalCompanies}] (${progress}%) Scraping ${company.name}...`);
-        const companyJobs = await scrapeAshbyCompany(company.name, company.slug);
+        console.log(`[Greenhouse] [${i + 1}/${totalCompanies}] (${progress}%) Scraping ${company.name}...`);
+        const companyJobs = await scrapeGreenhouseCompany(company.name, company.slug);
         jobsFound += companyJobs.length;
 
         // Upsert each job to database
@@ -56,7 +72,7 @@ export async function scrapeAshby(): Promise<ScrapeResult> {
         await new Promise(resolve => setTimeout(resolve, 500));
 
       } catch (error: any) {
-        console.error(`[Ashby] Error scraping ${company.name}:`, error.message);
+        console.error(`[Greenhouse] Error scraping ${company.name}:`, error.message);
       }
     }
 
@@ -73,7 +89,7 @@ export async function scrapeAshby(): Promise<ScrapeResult> {
       duration_ms: duration,
     });
 
-    console.log(`[Ashby] ✅ Scrape complete: ${jobsFound} jobs found, ${jobsUpserted} upserted, ${jobsMarkedInactive} marked inactive in ${duration}ms`);
+    console.log(`[Greenhouse] ✅ Scrape complete: ${jobsFound} jobs found, ${jobsUpserted} upserted, ${jobsMarkedInactive} marked inactive in ${duration}ms`);
 
     return {
       success: true,
@@ -96,7 +112,7 @@ export async function scrapeAshby(): Promise<ScrapeResult> {
       error: errorMessage,
     });
 
-    console.error(`[Ashby] ❌ Scrape failed:`, errorMessage);
+    console.error(`[Greenhouse] ❌ Scrape failed:`, errorMessage);
 
     return {
       success: false,
@@ -110,124 +126,61 @@ export async function scrapeAshby(): Promise<ScrapeResult> {
 }
 
 /**
- * Checks if a job posting is actually active by fetching the job page
- * Returns false if the page shows "This job is no longer accepting applications"
+ * Scrapes a single Greenhouse company's job board using their JSON API
+ * Greenhouse provides a public JSON endpoint at: boards.greenhouse.io/{slug}/embed/jobs
  */
-async function checkJobIsActive(jobUrl: string): Promise<boolean> {
-  try {
-    const response = await axios.get(jobUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-      },
-      timeout: 10000,
-    });
-
-    const $ = cheerio.load(response.data);
-
-    // Check for various indicators that the job is closed
-    const pageText = $('body').text().toLowerCase();
-
-    // Common phrases that indicate a closed job
-    const closedIndicators = [
-      'this job is no longer accepting applications',
-      'this position is no longer available',
-      'this job posting has been closed',
-      'applications are no longer being accepted',
-      'this position has been filled',
-    ];
-
-    for (const indicator of closedIndicators) {
-      if (pageText.includes(indicator)) {
-        return false;
-      }
-    }
-
-    // If there's no clear closed message, consider it active
-    return true;
-
-  } catch (error: any) {
-    // If we can't fetch the page, assume it's inactive to be safe
-    console.error(`[Ashby] Error checking job status for ${jobUrl}:`, error.message);
-    return false;
-  }
-}
-
-/**
- * Scrapes a single Ashby company's job board using their GraphQL API
- */
-async function scrapeAshbyCompany(companyName: string, slug: string): Promise<Job[]> {
+async function scrapeGreenhouseCompany(companyName: string, slug: string): Promise<Job[]> {
   const jobs: Job[] = [];
 
   try {
-    // Ashby uses a GraphQL API to fetch job listings
-    const graphqlQuery = {
-      operationName: "ApiJobBoardWithTeams",
-      variables: {
-        organizationHostedJobsPageName: slug,
+    // Greenhouse provides a JSON API for job listings
+    const apiUrl = `https://boards-api.greenhouse.io/v1/boards/${slug}/jobs`;
+
+    const response = await axios.get(apiUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+        'Accept': 'application/json',
       },
-      query: `query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {
-        jobBoard: jobBoardWithTeams(
-          organizationHostedJobsPageName: $organizationHostedJobsPageName
-        ) {
-          teams {
-            id
-            name
-            parentTeamId
-          }
-          jobPostings {
-            id
-            title
-            teamId
-            locationId
-            locationName
-            employmentType
-            secondaryLocations {
-              locationId
-              locationName
-            }
-          }
+      timeout: 15000,
+    });
+
+    const responseData = response.data;
+
+    // Greenhouse API returns jobs grouped by departments
+    let jobPostings: GreenhouseJob[] = [];
+
+    if (responseData.jobs && Array.isArray(responseData.jobs)) {
+      // Direct array of jobs
+      jobPostings = responseData.jobs;
+    } else if (responseData.departments && Array.isArray(responseData.departments)) {
+      // Jobs grouped by departments
+      for (const dept of responseData.departments as GreenhouseDepartment[]) {
+        if (dept.jobs && Array.isArray(dept.jobs)) {
+          jobPostings.push(...dept.jobs);
         }
-      }`,
-    };
-
-    const response = await axios.post(
-      "https://jobs.ashbyhq.com/api/non-user-graphql?op=ApiJobBoardWithTeams",
-      graphqlQuery,
-      {
-        headers: {
-          'Content-Type': 'application/json',
-          'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
-        },
-        timeout: 15000,
       }
-    );
-
-    const jobPostings = response.data?.data?.jobBoard?.jobPostings || [];
+    }
 
     for (const posting of jobPostings) {
-      const jobUrl = `https://jobs.ashbyhq.com/${slug}/${posting.id}`;
+      const jobUrl = posting.absolute_url;
       const jobId = uuidv5(jobUrl, NAMESPACE);
 
-      // Verify if the job is actually active by checking the job page
-      const isJobActive = await checkJobIsActive(jobUrl);
-
-      if (!isJobActive) {
-        console.log(`[Ashby] ${companyName}: Job ${posting.title} is closed, skipping`);
-        continue;
-      }
-
-      // Small delay to avoid overwhelming the server
-      await new Promise(resolve => setTimeout(resolve, 200));
-
-      // Determine location and remote status from location name
-      let location = posting.locationName || "Not specified";
+      // Determine location and remote status
+      let location = posting.location?.name || "Not specified";
       let isRemote = false;
 
       // Check if location indicates remote work
       const locationLower = location.toLowerCase();
-      if (locationLower.includes('remote')) {
+      if (
+        locationLower.includes('remote') ||
+        locationLower.includes('anywhere') ||
+        locationLower.includes('virtual')
+      ) {
         isRemote = true;
       }
+
+      // Build description from title
+      let description = `${posting.title} at ${companyName}`;
 
       jobs.push({
         id: jobId,
@@ -235,25 +188,25 @@ async function scrapeAshbyCompany(companyName: string, slug: string): Promise<Jo
         company: companyName,
         location,
         remote: isRemote,
-        description: `${posting.title} at ${companyName}`,
+        description,
         url: jobUrl,
         source: SOURCE,
         scraped_at: new Date().toISOString(),
       });
     }
 
-    console.log(`[Ashby] ${companyName}: ✓ Found ${jobs.length} active jobs`);
+    console.log(`[Greenhouse] ${companyName}: ✓ Found ${jobs.length} jobs`);
     return jobs;
 
   } catch (error: any) {
     if (error.response?.status === 404) {
-      console.log(`[Ashby] ${companyName}: No job board found (404)`);
+      console.log(`[Greenhouse] ${companyName}: No job board found (404)`);
     } else if (error.code === 'ECONNABORTED') {
-      console.error(`[Ashby] ${companyName}: Request timeout`);
-    } else if (error.response?.data?.errors) {
-      console.error(`[Ashby] ${companyName}: GraphQL error -`, error.response.data.errors[0]?.message);
+      console.error(`[Greenhouse] ${companyName}: Request timeout`);
+    } else if (error.response?.status === 403) {
+      console.error(`[Greenhouse] ${companyName}: Access forbidden (403) - board may be private`);
     } else {
-      console.error(`[Ashby] ${companyName}: Error -`, error.message);
+      console.error(`[Greenhouse] ${companyName}: Error -`, error.message);
     }
     return [];
   }
@@ -292,7 +245,7 @@ async function upsertJob(job: Job): Promise<void> {
         .eq("url", job.url);
 
       if (error) {
-        console.error(`[Ashby] Error updating job ${job.url}:`, error.message);
+        console.error(`[Greenhouse] Error updating job ${job.url}:`, error.message);
       }
     } else {
       // Insert new job
@@ -315,11 +268,11 @@ async function upsertJob(job: Job): Promise<void> {
         });
 
       if (error && error.code !== '23505') { // Ignore duplicate key errors
-        console.error(`[Ashby] Error inserting job ${job.url}:`, error.message);
+        console.error(`[Greenhouse] Error inserting job ${job.url}:`, error.message);
       }
     }
   } catch (error: any) {
-    console.error(`[Ashby] Error upserting job:`, error.message);
+    console.error(`[Greenhouse] Error upserting job:`, error.message);
   }
 }
 
@@ -329,7 +282,7 @@ async function upsertJob(job: Job): Promise<void> {
  */
 async function markMissingJobsInactive(scrapedUrls: Set<string>): Promise<number> {
   try {
-    // Get all active Ashby jobs
+    // Get all active Greenhouse jobs
     const { data: activeJobs } = await supabaseServer
       .from("jobs")
       .select("url")
@@ -354,15 +307,15 @@ async function markMissingJobsInactive(scrapedUrls: Set<string>): Promise<number
       .in("url", urlsToDeactivate);
 
     if (error) {
-      console.error(`[Ashby] Error marking jobs inactive:`, error.message);
+      console.error(`[Greenhouse] Error marking jobs inactive:`, error.message);
       return 0;
     }
 
-    console.log(`[Ashby] Marked ${urlsToDeactivate.length} jobs as inactive`);
+    console.log(`[Greenhouse] Marked ${urlsToDeactivate.length} jobs as inactive`);
     return urlsToDeactivate.length;
 
   } catch (error: any) {
-    console.error(`[Ashby] Error in markMissingJobsInactive:`, error.message);
+    console.error(`[Greenhouse] Error in markMissingJobsInactive:`, error.message);
     return 0;
   }
 }
@@ -384,9 +337,9 @@ async function logScrape(log: Omit<ScrapeLog, 'id' | 'timestamp'>): Promise<void
       });
 
     if (error) {
-      console.error(`[Ashby] Error logging scrape:`, error.message);
+      console.error(`[Greenhouse] Error logging scrape:`, error.message);
     }
   } catch (error: any) {
-    console.error(`[Ashby] Error in logScrape:`, error.message);
+    console.error(`[Greenhouse] Error in logScrape:`, error.message);
   }
 }

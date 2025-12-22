@@ -8,32 +8,17 @@ const supabase = createClient(
 
 /**
  * Fetch company logo from various sources
- * Priority: Clearbit Logo API -> Logo.dev -> Fallback
+ * Priority: Google Favicon API (reliable and free)
  */
 async function fetchCompanyLogo(companyName: string, domain?: string): Promise<string | null> {
-  // If we have a domain, try Clearbit Logo API
+  // If we have a domain, use Google's favicon service (very reliable)
   if (domain) {
     try {
-      const clearbitUrl = `https://logo.clearbit.com/${domain}`;
-      const response = await fetch(clearbitUrl, { method: 'HEAD' });
-      if (response.ok) {
-        return clearbitUrl;
-      }
+      const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=128`;
+      return faviconUrl;
     } catch (error) {
-      console.log(`Clearbit failed for ${domain}:`, error);
+      console.log(`Google favicon failed for ${domain}:`, error);
     }
-  }
-
-  // Try Logo.dev API (free, no API key needed)
-  try {
-    const searchQuery = encodeURIComponent(companyName);
-    const logoDevUrl = `https://img.logo.dev/${searchQuery}?token=pk_X-LbjWB5SiySEhiFchIG1Q`; // This is a public demo token
-    const response = await fetch(logoDevUrl, { method: 'HEAD' });
-    if (response.ok) {
-      return logoDevUrl;
-    }
-  } catch (error) {
-    console.log(`Logo.dev failed for ${companyName}:`, error);
   }
 
   // Try to guess domain from company name
@@ -43,13 +28,10 @@ async function fetchCompanyLogo(companyName: string, domain?: string): Promise<s
       .concat('.com');
 
     try {
-      const clearbitUrl = `https://logo.clearbit.com/${guessedDomain}`;
-      const response = await fetch(clearbitUrl, { method: 'HEAD' });
-      if (response.ok) {
-        return clearbitUrl;
-      }
+      const faviconUrl = `https://www.google.com/s2/favicons?domain=${guessedDomain}&sz=128`;
+      return faviconUrl;
     } catch (error) {
-      console.log(`Clearbit with guessed domain failed for ${guessedDomain}:`, error);
+      console.log(`Google favicon guess failed for ${guessedDomain}:`, error);
     }
   }
 

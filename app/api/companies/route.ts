@@ -9,6 +9,8 @@ const supabase = createClient(
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const searchQuery = searchParams.get('q') || '';
+  const limit = parseInt(searchParams.get('limit') || '50', 10);
+  const offset = parseInt(searchParams.get('offset') || '0', 10);
 
   try {
     // Build the query to aggregate companies
@@ -34,7 +36,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Aggregate companies data
+    // Aggregate companies data (case-insensitive grouping)
     const companiesMap = new Map<string, {
       name: string;
       jobCount: number;
@@ -45,10 +47,11 @@ export async function GET(request: NextRequest) {
 
     jobs?.forEach((job) => {
       const companyName = job.company;
+      const companyKey = companyName.toLowerCase(); // Use lowercase for grouping
 
-      if (!companiesMap.has(companyName)) {
-        companiesMap.set(companyName, {
-          name: companyName,
+      if (!companiesMap.has(companyKey)) {
+        companiesMap.set(companyKey, {
+          name: companyName, // Store original name (will be the first occurrence)
           jobCount: 0,
           activeJobCount: 0,
           locations: new Set(),
@@ -56,7 +59,14 @@ export async function GET(request: NextRequest) {
         });
       }
 
-      const company = companiesMap.get(companyName)!;
+      const company = companiesMap.get(companyKey)!;
+
+      // Prefer capitalized version of the name
+      if (companyName.charAt(0) === companyName.charAt(0).toUpperCase() &&
+          company.name.charAt(0) === company.name.charAt(0).toLowerCase()) {
+        company.name = companyName;
+      }
+
       company.jobCount++;
 
       if (job.is_active) {
@@ -73,7 +83,7 @@ export async function GET(request: NextRequest) {
     });
 
     // Convert to array and sort by active job count
-    const companies = Array.from(companiesMap.values())
+    const allCompanies = Array.from(companiesMap.values())
       .map(company => ({
         name: company.name,
         jobCount: company.jobCount,
@@ -82,6 +92,11 @@ export async function GET(request: NextRequest) {
         remoteAvailable: company.remoteAvailable,
       }))
       .sort((a, b) => b.activeJobCount - a.activeJobCount);
+
+    // Apply pagination
+    const total = allCompanies.length;
+    const companies = allCompanies.slice(offset, offset + limit);
+    const hasMore = offset + limit < total;
 
     // Fetch company logos from database
     const companyNames = companies.map(c => c.name);
@@ -102,7 +117,13 @@ export async function GET(request: NextRequest) {
       fallbackColor: logoMap.get(company.name)?.fallbackColor || null,
     }));
 
-    return NextResponse.json({ companies: companiesWithLogos });
+    return NextResponse.json({
+      companies: companiesWithLogos,
+      total,
+      hasMore,
+      offset,
+      limit
+    });
   } catch (error) {
     console.error('Error fetching companies:', error);
     return NextResponse.json(

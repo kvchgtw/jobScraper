@@ -10,7 +10,9 @@
     "type-check": "tsc --noEmit",
     "verify-schema": "tsx scripts/verify-schema.ts",
     "setup-logos": "tsx scripts/setup-company-logos.ts",
-    "test:ashby": "tsx scripts/test-ashby-scraper.ts"
+    "test:ashby": "tsx scripts/test-ashby-scraper.ts",
+    "test:greenhouse": "tsx scripts/test-greenhouse-scraper.ts",
+    "test:lever": "tsx scripts/test-lever-scraper.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.3",

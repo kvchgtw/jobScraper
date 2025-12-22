@@ -8,7 +8,6 @@ export interface AshbyCompany {
 
 export const ASHBY_COMPANIES: AshbyCompany[] = [
   { name: "The Browser Company", slug: "The%20Browser%20Company" },
-  { name: "Anthropic", slug: "anthropic" },
   { name: "Replit", slug: "replit" },
   { name: "OpenAI", slug: "openai" },
   { name: "Scale AI", slug: "scale" },
@@ -24,15 +23,13 @@ export const ASHBY_COMPANIES: AshbyCompany[] = [
   { name: "Fractional AI", slug: "fractional-ai" },
   { name: "Harvey", slug: "harvey" },
   { name: "Ramp", slug: "ramp" },
-  { name: "Perplexity", slug: "perplexityai" },
+  { name: "Perplexity", slug: "Perplexity" },
   { name: "Cursor", slug: "cursor" },
-  { name: "Magic", slug: "magic" },
+  { name: "Magic", slug: "magic.dev" },
   { name: "ElevenLabs", slug: "elevenlabs" },
-  { name: "Cresta", slug: "cresta" },
   { name: "Glean", slug: "glean" },
   { name: "Hebbia", slug: "hebbia" },
   { name: "Together AI", slug: "together-ai" },
-  { name: "Mistral AI", slug: "mistral" },
   { name: "Cohere", slug: "cohere" },
   { name: "Character.AI", slug: "character" },
   { name: "Adept", slug: "adept" },
@@ -48,4 +45,5 @@ export const ASHBY_COMPANIES: AshbyCompany[] = [
   { name: "Polymarket", slug: "polymarket" },
   { name: "Linear", slug: "linear" },
   { name: "Zapier", slug: "zapier" },
+  { name: "Supabase", slug: "supabase" },
 ];

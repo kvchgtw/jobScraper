@@ -16,8 +16,11 @@ interface Company {
 export default function CompaniesPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+  const [hasMore, setHasMore] = useState(false);
+  const [total, setTotal] = useState(0);
 
   // Debounce search query
   useEffect(() => {
@@ -35,12 +38,16 @@ export default function CompaniesPage() {
       const params = new URLSearchParams();
 
       if (debouncedSearchQuery) params.append('q', debouncedSearchQuery);
+      params.append('limit', '50');
+      params.append('offset', '0');
 
       try {
         const response = await fetch(`/api/companies?${params.toString()}`);
         const data = await response.json();
         const companiesData = data.companies || [];
         setCompanies(companiesData);
+        setHasMore(data.hasMore || false);
+        setTotal(data.total || 0);
 
         // Automatically fetch logos for companies that don't have them
         const companiesWithoutLogos = companiesData
@@ -79,6 +86,59 @@ export default function CompaniesPage() {
     }
     fetchCompanies();
   }, [debouncedSearchQuery]);
+
+  // Load more companies
+  const loadMoreCompanies = async () => {
+    if (!hasMore || loadingMore) return;
+
+    setLoadingMore(true);
+    const params = new URLSearchParams();
+
+    if (debouncedSearchQuery) params.append('q', debouncedSearchQuery);
+    params.append('limit', '50');
+    params.append('offset', companies.length.toString());
+
+    try {
+      const response = await fetch(`/api/companies?${params.toString()}`);
+      const data = await response.json();
+      const newCompanies = data.companies || [];
+
+      setCompanies(prev => [...prev, ...newCompanies]);
+      setHasMore(data.hasMore || false);
+
+      // Fetch logos for new companies
+      const companiesWithoutLogos = newCompanies
+        .filter((c: Company) => !c.logoUrl)
+        .map((c: Company) => c.name);
+
+      if (companiesWithoutLogos.length > 0) {
+        fetch('/api/logos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ companies: companiesWithoutLogos })
+        })
+          .then(res => res.json())
+          .then(logoData => {
+            setCompanies(prev => prev.map(company => {
+              const logoInfo = logoData.logos?.find((l: any) => l.company === company.name);
+              if (logoInfo) {
+                return {
+                  ...company,
+                  logoUrl: logoInfo.logoUrl,
+                  fallbackColor: logoInfo.fallbackColor
+                };
+              }
+              return company;
+            }));
+          })
+          .catch(err => console.error('Error fetching logos:', err));
+      }
+    } catch (error) {
+      console.error('Error loading more companies:', error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const getCompanyIcon = (company: string) => {
     const firstLetter = company.charAt(0).toUpperCase();
@@ -231,6 +291,22 @@ export default function CompaniesPage() {
                 </Link>
               ))}
             </div>
+
+            {hasMore && (
+              <div className="text-center pt-6 pb-4">
+                <button
+                  onClick={loadMoreCompanies}
+                  disabled={loadingMore}
+                  className="px-8 py-3 rounded-xl font-semibold text-gray-800 hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+                  style={{ backgroundColor: '#FFD700' }}
+                >
+                  {loadingMore ? 'Loading...' : 'Load More Companies'}
+                </button>
+                <p className="text-sm text-gray-500 mt-2">
+                  Showing {companies.length} of {total} companies
+                </p>
+              </div>
+            )}
           </>
         )}
 
