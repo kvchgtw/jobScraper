@@ -171,6 +171,49 @@ FROM jobs
 GROUP BY source;
 
 -- ============================================================================
+-- HELPER FUNCTIONS
+-- ============================================================================
+
+-- Count distinct active companies with optional search filter
+CREATE OR REPLACE FUNCTION count_active_companies(search_term TEXT DEFAULT NULL)
+RETURNS INTEGER AS $$
+  SELECT COUNT(*) FROM (
+    SELECT DISTINCT company
+    FROM jobs
+    WHERE is_active = true
+      AND (search_term IS NULL OR search_term = '' OR company ILIKE '%' || search_term || '%')
+  ) AS distinct_companies;
+$$ LANGUAGE sql STABLE;
+
+-- Get paginated active companies with aggregate metadata
+CREATE OR REPLACE FUNCTION get_active_companies(
+  search_term TEXT DEFAULT NULL,
+  result_limit INTEGER DEFAULT 50,
+  result_offset INTEGER DEFAULT 0
+)
+RETURNS TABLE (
+  name TEXT,
+  job_count INTEGER,
+  active_job_count INTEGER,
+  locations TEXT[],
+  remote_available BOOLEAN
+) AS $$
+  SELECT
+    company AS name,
+    COUNT(*) AS job_count,
+    COUNT(*) AS active_job_count,
+    COALESCE(array_agg(DISTINCT location) FILTER (WHERE location IS NOT NULL), ARRAY[]::TEXT[]) AS locations,
+    COALESCE(bool_or(COALESCE(remote, false)), false) AS remote_available
+  FROM jobs
+  WHERE is_active = true
+    AND (search_term IS NULL OR search_term = '' OR company ILIKE '%' || search_term || '%')
+  GROUP BY company
+  ORDER BY COUNT(*) DESC, company
+  OFFSET result_offset
+  LIMIT result_limit;
+$$ LANGUAGE sql STABLE;
+
+-- ============================================================================
 -- TABLE & VIEW DOCUMENTATION
 -- ============================================================================
 
@@ -181,3 +224,5 @@ COMMENT ON VIEW job_stats IS 'Analytics view for job statistics by source';
 COMMENT ON POLICY "Service role can insert scrape_logs" ON scrape_logs IS 'Allow scrapers using service role to log their execution';
 COMMENT ON POLICY "Service role can insert jobs" ON jobs IS 'Allow scrapers using service role to insert new jobs';
 COMMENT ON POLICY "Service role can update jobs" ON jobs IS 'Allow scrapers using service role to update existing jobs';
+COMMENT ON FUNCTION count_active_companies IS 'Returns count of distinct active companies, optionally filtered by search term';
+COMMENT ON FUNCTION get_active_companies IS 'Returns paginated active companies with aggregated metadata';

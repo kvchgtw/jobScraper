@@ -43,6 +43,8 @@ export const GREENHOUSE_COMPANIES: GreenhouseCompany[] = [
   { name: "Circle", slug: "circle" },
   { name: "Uniswap", slug: "uniswaplabs" },
   { name: "dYdX", slug: "dydx" },
+  { name: "Alchemy", slug: "alchemy" },
+  { name: "Jumio", slug: "jumio" },
 
   // Developer Tools
   { name: "PlanetScale", slug: "planetscale" },

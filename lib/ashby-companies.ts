@@ -46,4 +46,7 @@ export const ASHBY_COMPANIES: AshbyCompany[] = [
   { name: "Linear", slug: "linear" },
   { name: "Zapier", slug: "zapier" },
   { name: "Supabase", slug: "supabase" },
+  { name: "Persona", slug: "persona" },
+  { name: "Chainalysis", slug: "chainalysis-careers" },
+  
 ];

@@ -26,6 +26,7 @@ export const LEVER_COMPANIES: LeverCompany[] = [
   { name: "Palantir", slug: "palantir" },
   { name: "Ethena", slug: "ethenalabs" },
   { name: "Quizlet", slug: "quizlet-2" },
-
+  { name: "Gogolook", slug: "Gogolook" },
+  
 
 ];
